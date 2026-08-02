@@ -1,0 +1,30 @@
+# Dockerfile.slim
+# Оптимізований образ через multi-stage build.
+# Stage 1 (builder) ставить залежності в ізольованому середовищі.
+# Stage 2 (runtime) копіює лише необхідне - без компіляторів, build-tools, кешу pip.
+
+# ---------- Stage 1: builder ----------
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --user --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple \
+    -r requirements.txt
+
+# ---------- Stage 2: runtime ----------
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+COPY app/ app/
+COPY model/ model/
+COPY example.jpg .
+
+CMD ["python3", "app/inference.py", "example.jpg"]

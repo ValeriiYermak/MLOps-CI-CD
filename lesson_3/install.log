@@ -1,0 +1,50 @@
+
+=== Запуск install_dev_tools.sh: 2026-08-02 13:03:39 ===
+[2026-08-02 13:03:39] [INFO] Починаємо перевірку середовища...
+[2026-08-02 13:03:39] [OK] Docker знайдено: Docker version 29.6.2, build dfc4efb
+[2026-08-02 13:03:40] [OK] Docker Compose V2 знайдено: Docker Compose version v5.3.1
+
+=== Запуск install_dev_tools.sh: 2026-08-02 13:26:46 ===
+[2026-08-02 13:26:46] [INFO] Починаємо перевірку середовища...
+[2026-08-02 13:26:46] [OK] Docker знайдено: Docker version 29.6.2, build dfc4efb
+[2026-08-02 13:26:47] [OK] Docker Compose V2 знайдено: Docker Compose version v5.3.1
+[2026-08-02 13:26:47] [OK] Python версії 3.13 відповідає вимозі (>= 3.13).
+[2026-08-02 13:26:48] [OK] pip3 знайдено: pip 26.1.2 from C:\Users\INFRA\AppData\Local\Programs\Python\Python313\Lib\site-packages\pip (python 3.13)
+[2026-08-02 13:26:48] [FAIL] Пакет 'torch' не знайдено.
+[2026-08-02 13:26:48] [FAIL] Пакет 'torchvision' не знайдено.
+[2026-08-02 13:26:48] [FAIL] Пакет 'pillow' не знайдено.
+[2026-08-02 13:26:48] [WARN] Не всі ML-залежності присутні.
+[2026-08-02 13:26:48] [WARN] requirements.txt не знайдено. Встановіть вручну: pip3 install torch torchvision pillow
+[2026-08-02 13:26:48] [INFO] Перевірку завершено. Детальний лог: install.log
+
+=== Запуск install_dev_tools.sh: 2026-08-02 13:29:15 ===
+[2026-08-02 13:29:15] [INFO] Починаємо перевірку середовища...
+[2026-08-02 13:29:15] [OK] Docker знайдено: Docker version 29.6.2, build dfc4efb
+[2026-08-02 13:29:16] [OK] Docker Compose V2 знайдено: Docker Compose version v5.3.1
+[2026-08-02 13:29:16] [OK] Python версії 3.13 відповідає вимозі (>= 3.13).
+[2026-08-02 13:29:16] [OK] pip3 знайдено: pip 26.1.2 from C:\Users\INFRA\AppData\Local\Programs\Python\Python313\Lib\site-packages\pip (python 3.13)
+[2026-08-02 13:29:16] [FAIL] Пакет 'torch' не знайдено.
+[2026-08-02 13:29:17] [FAIL] Пакет 'torchvision' не знайдено.
+[2026-08-02 13:29:17] [FAIL] Пакет 'pillow' не знайдено.
+[2026-08-02 13:29:17] [WARN] Не всі ML-залежності присутні.
+[2026-08-02 13:29:17] [WARN] Знайдено scripts/../requirements.txt. Спроба встановити...
+
+[notice] A new release of pip is available: 26.1.2 -> 26.2
+[notice] To update, run: C:\Users\INFRA\AppData\Local\Programs\Python\Python313\python.exe -m pip install --upgrade pip
+ERROR: Invalid requirement: "cat > requirements.txt << 'EOF'": Expected semicolon (after name with no version specifier) or end
+    cat > requirements.txt << 'EOF'
+        ^ (from line 1 of scripts/../requirements.txt)
+[2026-08-02 13:29:19] [FAIL] Не вдалося встановити автоматично. Перевірте install.log.
+[2026-08-02 13:29:19] [INFO] Перевірку завершено. Детальний лог: install.log
+
+=== Запуск install_dev_tools.sh: 2026-08-02 13:34:13 ===
+[2026-08-02 13:34:13] [INFO] Починаємо перевірку середовища...
+[2026-08-02 13:34:13] [OK] Docker знайдено: Docker version 29.6.2, build dfc4efb
+[2026-08-02 13:34:14] [OK] Docker Compose V2 знайдено: Docker Compose version v5.3.1
+[2026-08-02 13:34:14] [OK] Python версії 3.13 відповідає вимозі (>= 3.13).
+[2026-08-02 13:34:15] [OK] pip3 знайдено: pip 26.1.2 from C:\Users\INFRA\AppData\Local\Programs\Python\Python313\Lib\site-packages\pip (python 3.13)
+[2026-08-02 13:34:21] [OK] Пакет 'torch' знайдено (версія: 2.7.0+cpu).
+[2026-08-02 13:34:31] [OK] Пакет 'torchvision' знайдено (версія: 0.22.0+cpu).
+[2026-08-02 13:34:32] [OK] Пакет 'pillow' знайдено (версія: 11.2.1).
+[2026-08-02 13:34:32] [OK] Усі ML-залежності вже присутні (ідемпотентність).
+[2026-08-02 13:34:32] [INFO] Перевірку завершено. Детальний лог: install.log

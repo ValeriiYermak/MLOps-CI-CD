@@ -1,0 +1,16 @@
+# Dockerfile.fat
+# "Важкий" (fat) образ - без оптимізацій, для порівняння зі slim-версією.
+# Використовує повний python:3.13 (з компіляторами, dev-заголовками, документацією тощо).
+
+FROM python:3.13
+
+WORKDIR /app
+
+COPY . .
+
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple \
+    -r requirements.txt
+
+CMD ["python3", "app/inference.py", "example.jpg"]
