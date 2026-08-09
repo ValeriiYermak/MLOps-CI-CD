@@ -1,0 +1,15 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Довірені файли — НЕ ігнорувати (для довідки, не потрібно додавати рядком)
+# .terraform.lock.hcl — цей файл, навпаки, МАЄ потрапити в git
+
+# OS / IDE сміття
+.idea/
+.DS_Store
+Thumbs.db
