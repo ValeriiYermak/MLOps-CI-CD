@@ -120,21 +120,40 @@ kubectl -n application port-forward deployment/demo-nginx 8081:80
 Видалення ресурсів
 Порядок зворотний до створення:
 ```bash
-# 1. Видалити ApplicationSet (це також прибере згенеровані Applications
-#    та їх ресурси в кластері, якщо в syncPolicy увімкнено prune)
+# 1. Видалити ApplicationSet
 kubectl delete -f hw_7/applicationset.yaml
+
+# ⚠️ ВАЖЛИВО: видалення ApplicationSet НЕ гарантує автоматичне видалення
+# вже згенерованих ним Application-ресурсів — вони можуть залишитись
+# "осиротілими" в кластері (Argo CD більше ними не керує, sync/prune
+# більше не відбувається, але самі об'єкти Application фізично існують).
+# Перевірити та за потреби видалити вручну:
+kubectl get applications -n infra-tools
+kubectl delete applications --all -n infra-tools
+
+# Переконатись, що ресурси demo-застосунку теж прибрані
+# (якщо ApplicationSet встиг видалитись до prune — видалити namespace вручну):
+kubectl get pods -n application
+kubectl delete namespace application --ignore-not-found
 
 # 2. Видалити Argo CD
 cd hw_7/terraform/argocd
 terraform destroy
 
-## Видалення ресурсів
+# ⚠️ ВАЖЛИВО: якщо namespace infra-tools "зависає" в статусі Terminating
+# (перевірити: kubectl get namespace infra-tools), причина зазвичай —
+# застряглі Application-об'єкти з finalizer resources-finalizer.argocd.argoproj.io
+# (Argo CD-контролер, який мав би підтвердити очищення, вже видалений разом
+# з релізом, тому finalizer нікому "відпустити"). Перевірити та прибрати вручну:
+kubectl get applications -n infra-tools
+kubectl patch application <ім'я> -n infra-tools -p '{"metadata":{"finalizers":null}}' --type=merge
+# (повторити для кожного застряглого Application; після цього namespace
+# видаляється одразу)
 
-Порядок зворотний до створення — спочатку EKS, потім VPC, бо EKS-кластер
-і його node group-и розташовані всередині VPC і залежать від неї.
-
-```bash
-cd eks
+# 3. Видалити EKS-кластер, потім VPC
+# Порядок важливий — EKS-кластер і його node group-и розташовані всередині
+# VPC і залежать від неї, тому спочатку видаляється кластер, а вже потім мережа.
+cd ../../../hw_5/eks-vpc-cluster/eks
 terraform destroy
 
 cd ../vpc
