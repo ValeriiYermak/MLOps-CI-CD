@@ -1,0 +1,16 @@
+stages:
+  - train
+
+train-model:
+  stage: train
+  image:
+    name: amazon/aws-cli:2.15.0
+    entrypoint: [""]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - |
+      aws stepfunctions start-execution \
+        --state-machine-arn "$STATE_MACHINE_ARN" \
+        --name "train-$(date +%s)" \
+        --input "{\"source\": \"gitlab-ci\", \"commit\": \"$CI_COMMIT_SHORT_SHA\"}"
