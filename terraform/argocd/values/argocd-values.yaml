@@ -1,0 +1,49 @@
+# argocd-values.yaml
+# Кастомні налаштування для офіційного Helm-чарту argo-cd
+
+# --- Вимикаємо необов'язкові компоненти для економії ресурсів ---
+# У навчальному кластері на t3.micro нодах діє жорсткий ліміт кількості
+# подів на ноду (обмеження ENI для AWS VPC CNI, ~4 поди/нода). Dex (SSO)
+# та Notifications Controller не використовуються в цьому завданні,
+# тому вимикаємо їх, щоб звільнити місце для основних компонентів.
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+# --- Налаштування Argo CD Server (компонент з Web UI та API) ---
+server:
+  service:
+    type: ClusterIP
+
+  extraArgs:
+    - --insecure
+
+# --- RBAC (Role-Based Access Control) для самого Argo CD ---
+configs:
+  rbac:
+    policy.default: role:readonly
+
+    policy.csv: |
+      p, role:admin, applications, *, */*, allow
+      p, role:admin, clusters, *, *, allow
+      p, role:admin, repositories, *, *, allow
+      g, admin, role:admin
+
+# --- Таймаути для контролерів Argo CD ---
+controller:
+  args:
+    appResyncPeriod: "60"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# --- Таймаути на рівні Helm-операцій (встановлення/оновлення) ---
+global:
+  revisionHistoryLimit: 5
