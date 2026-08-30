@@ -6,28 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: minio
-    targetRevision: 14.6.7
-    helm:
-      values: |
-        auth:
-          rootUser: minioadmin
-          rootPassword: minioadmin123
-        image:
-          repository: bitnamilegacy/minio
-        defaultBuckets: "mlflow-artifacts"
-        service:
-          type: ClusterIP
-        persistence:
-          enabled: false
-        resources:
-          requests:
-            cpu: 50m
-            memory: 128Mi
-          limits:
-            cpu: 300m
-            memory: 384Mi
+    repoURL: https://github.com/ValeriiYermak/MLOps-CI-CD.git
+    targetRevision: final-project
+    path: k8s/minio
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops-system

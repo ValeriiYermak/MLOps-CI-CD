@@ -6,32 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: postgresql
-    targetRevision: 15.5.20
-    helm:
-      values: |
-        global:
-          imagePullSecrets: []
-        image:
-          repository: bitnamilegacy/postgresql
-        auth:
-          username: mlflow
-          password: mlflow123
-          database: mlflow
-          postgresPassword: postgres123
-        primary:
-          service:
-            type: ClusterIP
-          persistence:
-            enabled: false
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 300m
-              memory: 384Mi
+    repoURL: https://github.com/ValeriiYermak/MLOps-CI-CD.git
+    targetRevision: final-project
+    path: k8s/postgres
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops-system
