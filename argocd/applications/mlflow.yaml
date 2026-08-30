@@ -37,11 +37,11 @@ spec:
           MLFLOW_S3_ENDPOINT_URL: http://minio.mlops-system.svc.cluster.local:9000
         resources:
           requests:
-            cpu: 150m
-            memory: 512Mi
+            cpu: 200m
+            memory: 768Mi
           limits:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 750m
+            memory: 2Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops-system
