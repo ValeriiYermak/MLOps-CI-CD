@@ -5,7 +5,6 @@ metadata:
   namespace: infra-tools
 spec:
   project: default
-
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: minio
@@ -15,30 +14,23 @@ spec:
         auth:
           rootUser: minioadmin
           rootPassword: minioadmin123
-        
         image:
           repository: bitnamilegacy/minio
-
         defaultBuckets: "mlflow-artifacts"
-
         service:
           type: ClusterIP
-
         persistence:
           enabled: false
-
         resources:
           requests:
             cpu: 50m
             memory: 128Mi
           limits:
-            cpu: 200m
-            memory: 256Mi
-
+            cpu: 300m
+            memory: 384Mi
   destination:
     server: https://kubernetes.default.svc
-    namespace: mlflow
-
+    namespace: mlops-system
   syncPolicy:
     automated:
       prune: true

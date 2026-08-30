@@ -5,7 +5,6 @@ metadata:
   namespace: infra-tools
 spec:
   project: default
-
   source:
     repoURL: https://community-charts.github.io/helm-charts
     chart: mlflow
@@ -15,22 +14,18 @@ spec:
         service:
           type: ClusterIP
           port: 5000
-
         telemetry:
           enabled: false
-
         extraArgs:
           workers: "1"
-
         backendStore:
           postgres:
             enabled: true
-            host: postgres-postgresql.mlflow.svc.cluster.local
+            host: postgres-postgresql.mlops-system.svc.cluster.local
             port: 5432
             database: mlflow
             user: mlflow
             password: mlflow123
-
         artifactRoot:
           s3:
             enabled: true
@@ -38,23 +33,18 @@ spec:
             path: ""
             awsAccessKeyId: minioadmin
             awsSecretAccessKey: minioadmin123
-
         extraEnvVars:
-          MLFLOW_S3_ENDPOINT_URL: http://minio.mlflow.svc.cluster.local:9000
-          GUNICORN_CMD_ARGS: "--max-requests 100 --max-requests-jitter 20"
-
+          MLFLOW_S3_ENDPOINT_URL: http://minio.mlops-system.svc.cluster.local:9000
         resources:
           requests:
-            cpu: 100m
-            memory: 256Mi
-          limits:
-            cpu: 300m
+            cpu: 150m
             memory: 512Mi
-
+          limits:
+            cpu: 500m
+            memory: 1Gi
   destination:
     server: https://kubernetes.default.svc
-    namespace: mlflow
-
+    namespace: mlops-system
   syncPolicy:
     automated:
       prune: true

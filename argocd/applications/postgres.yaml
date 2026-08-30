@@ -5,7 +5,6 @@ metadata:
   namespace: infra-tools
 spec:
   project: default
-
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: postgresql
@@ -14,35 +13,28 @@ spec:
       values: |
         global:
           imagePullSecrets: []
-
         image:
           repository: bitnamilegacy/postgresql
-
         auth:
           username: mlflow
           password: mlflow123
           database: mlflow
           postgresPassword: postgres123
-
         primary:
           service:
             type: ClusterIP
-
           persistence:
             enabled: false
-
           resources:
             requests:
               cpu: 50m
               memory: 128Mi
             limits:
-              cpu: 200m
-              memory: 256Mi
-
+              cpu: 300m
+              memory: 384Mi
   destination:
     server: https://kubernetes.default.svc
-    namespace: mlflow
-
+    namespace: mlops-system
   syncPolicy:
     automated:
       prune: true
