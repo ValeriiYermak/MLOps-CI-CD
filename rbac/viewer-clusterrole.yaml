@@ -1,0 +1,10 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: viewer
+rules:
+  - apiGroups: ["", "apps", "batch", "argoproj.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  # Явно НЕ дозволено: жодних verbs create/update/patch/delete —
+  # чиста read-only роль для перегляду стану кластера/додатків.
