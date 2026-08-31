@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -10,17 +11,20 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.model_loader import CLASS_NAMES, ModelLoadError, load_production_model
+from app.model_loader import (
+    CLASS_NAMES,
+    ModelLoadError,
+    get_current_production_version,
+    load_production_model,
+)
 from app.schemas import HealthResponse, IrisFeatures, PredictionResponse
 
-# --- Структуроване логування (JSON-подібний формат, придатний для Loki) ---
 logging.basicConfig(
     level=logging.INFO,
     format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
 )
 logger = logging.getLogger("inference")
 
-# --- Prometheus-метрики (A5: request rate, latency p50/p95, error rate) ---
 REQUEST_COUNT = Counter(
     "inference_requests_total", "Кількість запитів", ["method", "endpoint", "status"]
 )
@@ -34,23 +38,52 @@ ERROR_COUNT = Counter(
     "inference_errors_total", "Кількість помилок", ["endpoint", "error_type"]
 )
 
+MODEL_RELOAD_INTERVAL_SECONDS = 30
+
 limiter = Limiter(key_func=get_remote_address)
 
 model_state = {"model": None, "version": None}
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def _try_load_model() -> None:
     try:
         model, version = load_production_model()
         model_state["model"] = model
         model_state["version"] = version
         logger.info('{"event":"model_loaded","version":"%s"}', version)
     except ModelLoadError as exc:
-        # Не валимо старт застосунку — /health покаже стан "no model",
-        # readiness-probe відповідно не пропустить трафік.
         logger.error('{"event":"model_load_failed","error":"%s"}', str(exc))
+
+
+async def _model_watcher() -> None:
+    """
+    Фоновий таск: раз на MODEL_RELOAD_INTERVAL_SECONDS перевіряє номер
+    поточної Production-версії в Registry. Якщо вона відрізняється від
+    завантаженої (або модель ще не завантажена) — перезавантажує модель
+    у пам'яті поду, без рестарту контейнера. Це закриває розрив між
+    "модель промоутнули" і "inference реально почав її використовувати" —
+    без потреби вручну видаляти под після кожного promote/rollback.
+    """
+    while True:
+        try:
+            current_version = get_current_production_version()
+            if current_version and current_version != model_state["version"]:
+                logger.info(
+                    '{"event":"new_production_version_detected","version":"%s"}',
+                    current_version,
+                )
+                _try_load_model()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning('{"event":"model_watcher_check_failed","error":"%s"}', str(exc))
+        await asyncio.sleep(MODEL_RELOAD_INTERVAL_SECONDS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _try_load_model()
+    watcher_task = asyncio.create_task(_model_watcher())
     yield
+    watcher_task.cancel()
 
 
 app = FastAPI(title="Iris Inference Service", lifespan=lifespan)
@@ -60,8 +93,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # C1: HTTP 400 на некоректний вхід, без витоку внутрішніх деталей
-    # (без стек-трейсу, без шляхів файлів — лише які поля некоректні).
     ERROR_COUNT.labels(endpoint=request.url.path, error_type="validation_error").inc()
     fields = [".".join(str(p) for p in err["loc"][1:]) for err in exc.errors()]
     return JSONResponse(

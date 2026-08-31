@@ -28,6 +28,21 @@ def _compute_checksum(local_path: str) -> str:
     return hasher.hexdigest()
 
 
+def get_current_production_version() -> str | None:
+    """
+    Легкий опитувальний запит — лише дізнатись НОМЕР поточної Production-версії,
+    без завантаження самої моделі. Використовується фоновим поллінгом, щоб
+    виявити, що з'явилась нова Production-версія (напр. після promote/rollback),
+    не перевантажуючи Registry повним download на кожен цикл перевірки.
+    """
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    client = MlflowClient()
+    versions = client.get_latest_versions(REGISTERED_MODEL_NAME, stages=["Production"])
+    if not versions:
+        return None
+    return versions[0].version
+
+
 def load_production_model():
     """
     Завантажує модель зі стадії Production. Перед завантаженням у пам'ять
