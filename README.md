@@ -18,8 +18,8 @@ AWS-доступу".
 | Amazon EKS | kind | ✅ |
 | Amazon ECR | локальний Docker registry (`registry:2`) | ✅ |
 | Amazon S3 | MinIO (plain manifest, не Bitnami chart) | ✅ |
-| AWS Step Functions | Argo Workflows / GitLab CI | заплановано |
-| AWS IAM | Kubernetes ServiceAccounts + RBAC | заплановано |
+| AWS Step Functions | Argo Workflows / GitLab CI | заплановано (День 4) |
+| AWS IAM | Kubernetes ServiceAccounts + RBAC | ✅ (rbac/) |
 | VPC, NAT Gateway, повні EKS Terraform-модулі | не потрібні | — |
 
 ## Архітектура
@@ -36,10 +36,11 @@ AWS-доступу".
 │         │                        └───────────┘                          │          │
 │         │ manages                                                       │          │
 │         ▼                                                               │          │
-│  namespace: monitoring           namespace: staging / production        │          │
+│  namespace: monitoring           namespace: production                  │          │
 │  ┌───────────┐ ┌─────────┐       ┌──────────────────────────────┐      │          │
-│  │ Prometheus│ │ Grafana │       │  inference (FastAPI, Blue-Green)│◀────┘          │
-│  │ +Pushgw   │ │         │       │  завантажує модель з Registry  │                 │
+│  │ Prometheus│ │ Grafana │       │  inference-blue / inference-green│◀────┘          │
+│  │ +Pushgw   │ │ (+Loki, │       │  (FastAPI, Blue-Green, RBAC)    │                 │
+│  │           │ │  План.) │       │  завантажує модель + checksum   │                 │
 │  └───────────┘ └─────────┘       └──────────────────────────────┘                  │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -47,7 +48,7 @@ AWS-доступу".
         │ git push
 ┌───────┴────────┐
 │  GitHub repo    │  ValeriiYermak/MLOps-CI-CD, гілка final-project
-│  (джерело правди│  argocd/applications/*.yaml, k8s/*, terraform/*
+│  (джерело правди│  argocd/applications/*.yaml, k8s/*, terraform/*, rbac/*
 │   для ArgoCD)   │
 └─────────────────┘
 ```
@@ -61,7 +62,7 @@ AWS-доступу".
 | kubectl | v1.36.1 |
 | helm | v4.2.4 |
 | terraform | v1.15.8 (CLI ≥ 1.5 вимога виконана) |
-| Python (для training-коду) | 3.12 (3.13 несумісний з pyarrow — немає готового wheel) |
+| Python (training/inference) | 3.12 (3.13 несумісний з pyarrow — немає готового wheel) |
 
 ## Структура репозиторію
 
@@ -71,21 +72,30 @@ Final_Project/
 ├── k8s/
 │   ├── namespaces/          # bootstrap-манифест namespaces
 │   ├── minio/                # plain Deployment+Service+Job (заміна Bitnami chart)
-│   └── postgres/             # plain Deployment+Service (заміна Bitnami chart)
+│   ├── postgres/             # plain Deployment+Service (заміна Bitnami chart)
+│   └── inference/            # Blue-Green Deployments (blue/green) + Service
 ├── terraform/
-│   ├── argocd/               # Terraform-модуль: ArgoCD через helm_release
-│   ├── mlflow/                # (заплановано, поки через ArgoCD Application напряму)
-│   └── monitoring/            # (заплановано)
+│   └── argocd/               # Terraform-модуль: ArgoCD через helm_release
 ├── argocd/
 │   ├── root-app.yaml          # кореневий Application (app-of-apps)
 │   └── applications/          # ArgoCD Application-манифести (джерело правди для деплоїв)
-├── training/                 # тренування моделі, реєстрація в MLflow Registry
-│   ├── train_and_push.py
+├── training/
+│   ├── train_and_push.py      # тренування + реєстрація в MLflow Registry + checksum
+│   ├── registry/
+│   │   ├── promote_to_production.py   # Staging → Production (окрема дія, B2)
+│   │   └── rollback.py                # Production → Archived → Production (B4)
 │   ├── requirements.txt
 │   └── .venv/                 # Python 3.12 venv (не в git)
-├── inference/                 # (заплановано) FastAPI inference-сервіс
-├── workflows/                 # заміна AWS Step Functions (Argo Workflows/CI)
-├── rbac/                      # (заплановано) RBAC-ролі
+├── inference/
+│   ├── app/
+│   │   ├── main.py            # FastAPI: /predict, /health, /metrics
+│   │   ├── schemas.py         # Pydantic input validation (C1)
+│   │   └── model_loader.py    # завантаження з Registry + checksum-перевірка (C4)
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .venv/                 # (не в git)
+├── rbac/                      # C3: mlops-engineer (staging/production), viewer ролі
+├── workflows/                 # заміна AWS Step Functions (заплановано: Argo Workflows/CI)
 └── docs/                      # додаткова документація
 ```
 
@@ -105,8 +115,6 @@ docker network connect kind kind-registry
 kubectl cluster-info --context kind-mlops-final
 ```
 
-Перевірка: `kubectl cluster-info` повертає адресу control-plane без помилок.
-
 **Важливо (WSL2/Docker Desktop):** якщо MLflow падає з `OOMKilled` (exit 137) навіть
 при виставлених ресурсних лімітах — перевірте `%USERPROFILE%\.wslconfig`. За
 замовчуванням WSL2 може мати занижений ліміт пам'яті. Виправлення:
@@ -125,8 +133,6 @@ processors=4
 kubectl apply -f .\k8s\namespaces\namespaces.yaml
 kubectl get namespaces
 ```
-
-Перевірка: `staging`, `production`, `mlops-system`, `monitoring` у статусі `Active`.
 
 Призначення namespace:
 - `staging` — тестове середовище для нових версій моделі
@@ -149,8 +155,8 @@ kubectl apply -f .\argocd\root-app.yaml
 kubectl get pods -n infra-tools
 kubectl get applications -n infra-tools
 ```
-Усі поди ArgoCD мають бути `Running`. Усі Applications (`root-app`, `minio`,
-`postgres`, `mlflow`, `grafana`, `prometheus`, `pushgateway`) — `Synced`/`Healthy`.
+Усі Applications (`root-app`, `minio`, `postgres`, `mlflow`, `grafana`, `prometheus`,
+`pushgateway`, `inference`) мають бути `Synced`/`Healthy`.
 
 Доступ до ArgoCD UI:
 ```powershell
@@ -162,41 +168,42 @@ kubectl -n infra-tools get secret argocd-initial-admin-secret -o jsonpath="{.dat
 
 Починаючи з цього моменту, жодних ручних `kubectl apply`/`helm install` — усі сервіси
 деплояться як ArgoCD Application з `argocd/applications/`, застосовуються через
-`git push` у гілку `final-project`.
+`git push` у гілку `final-project`. Якщо ArgoCD не підхопив новий коміт одразу
+(інтервал автосинку ~3 хв) — форс-refresh:
+```powershell
+kubectl patch application root-app -n infra-tools --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+```
 
 ## Відомі проблеми та рішення
 
 - **`charts.bitnami.com` Helm-репозиторій офіційно deprecated** (Broadcom/Bitnami,
-  видалення завершено після 29.09.2025). Спроби `helm pull` для MinIO/PostgreSQL
-  Bitnami-чартів тайм-аутяться (90с). **Рішення:** відмовились від Bitnami-чартів
-  повністю, MinIO та PostgreSQL розгортаються як прості k8s-манифести
-  (`k8s/minio/manifests.yaml`, `k8s/postgres/manifests.yaml`) з офіційними образами
-  `minio/minio`, `postgres:16`.
+  видалення завершено після 29.09.2025). **Рішення:** MinIO та PostgreSQL
+  розгортаються як прості k8s-манифести (`k8s/minio/`, `k8s/postgres/`) з офіційними
+  образами `minio/minio`, `postgres:16` замість Bitnami-чартів.
 - **MLflow OOMKilled на дефолтних лімітах WSL2.** Виправлено через `.wslconfig`
-  (див. Фазу 1) + підняття `limits.memory` MLflow до `2Gi`.
+  (Фаза 1) + `limits.memory: 2Gi` для MLflow.
+- **MLflow 3.x: "Invalid Host header - possible DNS rebinding attack detected" (403).**
+  Вбудований security middleware MLflow блокує запити з Host-заголовком, відмінним
+  від `localhost` — це ламало доступ з подів через кластерне DNS-ім'я
+  (`mlflow.mlops-system.svc.cluster.local`). **Рішення:** додано
+  `extraArgs.allowed-hosts: "*"` у values MLflow Helm-релізу.
 - **Kubelet-подія "Pulling" іноді зависає**, хоча образ уже реально завантажений на
-  ноду (перевіряється через `docker exec <node> crictl images`). Рішення:
-  `kubectl delete pod` для форс-рестарту — новий под миттєво підхоплює вже наявний
-  образ.
-- **ArgoCD prune старих ресурсів після зміни джерела Application** (напр. заміна
-  Helm chart на plain manifest) може затримуватись. При підозрі — форс-refresh
-  (`kubectl patch application <name> --type merge -p '{"metadata":{"annotations":
-  {"argocd.argoproj.io/refresh":"hard"}}}'`) або повне перестворення кластера
-  (`kind delete cluster` → bootstrap з нуля за цим README) — надійніше й швидше за
-  точкове дебажування залишків.
+  ноду. Рішення: `kubectl delete pod` для форс-рестарту.
+- **ArgoCD prune старих ресурсів / затримка підхоплення нового коміту.** Форс-refresh
+  через `kubectl patch application <name> ... annotations "argocd.argoproj.io/refresh": "hard"`,
+  або за потреби повне перестворення кластера (`kind delete cluster` → bootstrap з
+  нуля за цим README) — надійніше й швидше за точкове дебажування залишків.
 
-## Model Registry — запуск тренування локально
+## Model Registry — тренування, промоушен, rollback
 
 Потрібні 3 одночасні port-forward (в окремих терміналах):
-
 ```powershell
 kubectl port-forward svc/mlflow -n mlops-system 5000:5000
 kubectl port-forward svc/minio -n mlops-system 9000:9000
 kubectl port-forward svc/pushgateway-prometheus-pushgateway -n monitoring 9091:9091
 ```
 
-Python-оточення (3.12 обов'язково — 3.13 не сумісний з pyarrow):
-
+**Тренування** (реєструє нові версії, автоматично Staging, рахує SHA256-checksum):
 ```powershell
 cd training
 py -3.12 -m venv .venv
@@ -205,8 +212,59 @@ pip install -r requirements.txt
 python train_and_push.py
 ```
 
-Результат: 5 версій моделі `iris-logistic-regression` в MLflow Model Registry, усі
-автоматично в статусі `Staging`; найкраща (за accuracy) скопійована в `best_model/`.
+**Промоушен у Production** (окрема дія від тренування — вимога B2):
+```powershell
+python registry\promote_to_production.py            # промоутить останню Staging-версію
+python registry\promote_to_production.py --version 7  # або конкретну версію
+```
+
+**Rollback** (одна команда — вимога B4):
+```powershell
+python registry\rollback.py
+```
+
+## Inference-сервіс (FastAPI, Blue-Green)
+
+Локальний запуск для розробки:
+```powershell
+cd inference
+py -3.12 -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+$env:MLFLOW_TRACKING_URI = "http://localhost:5000"
+$env:AWS_ACCESS_KEY_ID = "minioadmin"
+$env:AWS_SECRET_ACCESS_KEY = "minioadmin123"
+$env:MLFLOW_S3_ENDPOINT_URL = "http://localhost:9000"
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+Swagger UI: `http://localhost:8000/docs`
+
+**Docker build + push у локальний registry:**
+```powershell
+docker build -t localhost:5001/iris-inference:v1 .
+docker push localhost:5001/iris-inference:v1
+```
+
+**У кластері** (через ArgoCD, `k8s/inference/manifests.yaml`): два Deployment
+(`inference-blue`, `inference-green`), один Service `inference` в namespace
+`production`, перемикання трафіку — зміна `spec.selector.slot` у Service
+(`blue`/`green`).
+
+Перевірка:
+```powershell
+kubectl port-forward svc/inference -n production 8080:80
+```
+`http://localhost:8080/health` → `{"status":"ok","model_version":"...","model_stage":"Production"}`
+
+**Security (Блок C):**
+- C1 — Pydantic-валідація входу (`sepal_length/width`, `petal_length/width`), HTTP 400
+  без витоку внутрішніх деталей
+- C2 — rate limiting 30 запитів/хв на `/predict` (slowapi)
+- C3 — RBAC-ролі в `rbac/`: `mlops-engineer` (повний доступ staging, обмежений
+  production), `viewer` (read-only, ClusterRole)
+- C4 — immutable model artifacts: SHA256-checksum записується як tag версії при
+  тренуванні, inference перевіряє його перед завантаженням моделі (підтверджено
+  робочим — сервіс відмовився завантажити версію без checksum-тега)
 
 ---
-*Документ доповнюється по ходу виконання проєкту (День 1-2 завершені).*
+*Документ доповнюється по ходу виконання проєкту (День 1-3 завершені).*
