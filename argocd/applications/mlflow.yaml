@@ -18,6 +18,7 @@ spec:
           enabled: false
         extraArgs:
           workers: "1"
+          allowed-hosts: "*"
         backendStore:
           postgres:
             enabled: true
