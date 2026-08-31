@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-blue
+  namespace: production
+  labels:
+    app: inference
+    slot: blue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference
+      slot: blue
+  template:
+    metadata:
+      labels:
+        app: inference
+        slot: blue
+    spec:
+      containers:
+        - name: inference
+          image: localhost:5001/iris-inference:v1
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow.mlops-system.svc.cluster.local:5000
+            - name: AWS_ACCESS_KEY_ID
+              value: minioadmin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: minioadmin123
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: http://minio.mlops-system.svc.cluster.local:9000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-green
+  namespace: production
+  labels:
+    app: inference
+    slot: green
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference
+      slot: green
+  template:
+    metadata:
+      labels:
+        app: inference
+        slot: green
+    spec:
+      containers:
+        - name: inference
+          image: localhost:5001/iris-inference:v1
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow.mlops-system.svc.cluster.local:5000
+            - name: AWS_ACCESS_KEY_ID
+              value: minioadmin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: minioadmin123
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: http://minio.mlops-system.svc.cluster.local:9000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference
+  namespace: production
+spec:
+  selector:
+    app: inference
+    slot: blue
+  ports:
+    - port: 80
+      targetPort: 8000
