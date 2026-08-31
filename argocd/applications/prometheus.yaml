@@ -29,6 +29,13 @@ spec:
               cpu: 300m
               memory: 512Mi
 
+        rbac:
+          create: true
+
+        serviceAccounts:
+          server:
+            create: true
+
         alertmanager:
           enabled: false
 
@@ -48,11 +55,50 @@ spec:
                 static_configs:
                   - targets:
                       - localhost:9090
+
               - job_name: pushgateway
                 honor_labels: true
                 static_configs:
                   - targets:
                       - pushgateway-prometheus-pushgateway.monitoring.svc.cluster.local:9091
+
+              - job_name: inference
+                metrics_path: /metrics
+                kubernetes_sd_configs:
+                  - role: pod
+                    namespaces:
+                      names:
+                        - production
+                relabel_configs:
+                  - source_labels: [__meta_kubernetes_pod_label_app]
+                    action: keep
+                    regex: inference
+                  - source_labels: [__meta_kubernetes_pod_label_slot]
+                    target_label: slot
+                  - source_labels: [__meta_kubernetes_pod_name]
+                    target_label: pod
+
+              - job_name: kubernetes-cadvisor
+                scheme: https
+                tls_config:
+                  ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                  insecure_skip_verify: true
+                bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+                kubernetes_sd_configs:
+                  - role: node
+                relabel_configs:
+                  - action: labelmap
+                    regex: __meta_kubernetes_node_label_(.+)
+                  - target_label: __address__
+                    replacement: kubernetes.default.svc:443
+                  - source_labels: [__meta_kubernetes_node_name]
+                    regex: (.+)
+                    target_label: __metrics_path__
+                    replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+                metric_relabel_configs:
+                  - source_labels: [namespace]
+                    regex: production
+                    action: keep
 
   destination:
     server: https://kubernetes.default.svc
