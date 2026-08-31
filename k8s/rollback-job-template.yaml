@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: rollback-production-
+  namespace: mlops-system
+  labels:
+    app: mlflow-registry-ops
+    action: rollback
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: mlflow-registry-ops
+        action: rollback
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rollback
+          image: localhost:5001/mlflow-registry-ops:v1
+          args: ["registry/rollback.py"]
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow.mlops-system.svc.cluster.local:5000
