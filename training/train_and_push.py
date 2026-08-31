@@ -4,9 +4,10 @@ train_and_push.py
 Тренує кілька моделей LogisticRegression на датасеті Iris з різними
 гіперпараметрами (C, max_iter), логує кожен запуск у MLflow (параметри,
 метрики, модель-артефакт), реєструє модель у MLflow Model Registry
-(нова версія на кожен run, автоматичний перехід у Staging), пушить
-accuracy/loss у Prometheus PushGateway з міткою run_id, і в кінці
-копіює модель із найкращою accuracy у локальну директорію ./best_model/.
+(нова версія на кожен run, автоматичний перехід у Staging, SHA256-checksum
+артефакту як immutable tag версії — C4), пушить accuracy/loss у Prometheus
+PushGateway з міткою run_id, і в кінці копіює модель із найкращою accuracy
+у локальну директорію ./best_model/.
 
 Запуск:
     python train_and_push.py
@@ -21,7 +22,6 @@ accuracy/loss у Prometheus PushGateway з міткою run_id, і в кінці
     BEST_MODEL_DIR          default: best_model
     GIT_COMMIT_SHA          default: визначається автоматично через `git rev-parse --short HEAD`
 
-    # Дані для підключення MLflow-клієнта (boto3) до MinIO як до S3.
     AWS_ACCESS_KEY_ID       default: minioadmin
     AWS_SECRET_ACCESS_KEY   default: minioadmin123
     MLFLOW_S3_ENDPOINT_URL  default: http://localhost:9000
@@ -32,6 +32,7 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 
 import mlflow
 import mlflow.sklearn
@@ -47,7 +48,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Налаштування підключення (з дефолтами для port-forward) ---
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "minioadmin")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "minioadmin123")
 os.environ.setdefault("MLFLOW_S3_ENDPOINT_URL", "http://localhost:9000")
@@ -58,7 +58,6 @@ EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT", "iris-logistic-regression")
 REGISTERED_MODEL_NAME = os.getenv("REGISTERED_MODEL_NAME", "iris-logistic-regression")
 BEST_MODEL_DIR = os.getenv("BEST_MODEL_DIR", "best_model")
 
-# --- Сітка гіперпараметрів для перебору ---
 PARAM_GRID = [
     {"C": 0.01, "max_iter": 100},
     {"C": 0.1, "max_iter": 100},
@@ -69,7 +68,6 @@ PARAM_GRID = [
 
 
 def get_git_commit_sha() -> str:
-    """Повертає короткий Git SHA поточного коміту (для трасованості моделі)."""
     override = os.getenv("GIT_COMMIT_SHA")
     if override:
         return override
@@ -87,27 +85,47 @@ def get_git_commit_sha() -> str:
 
 
 def get_dataset_hash(X, y) -> str:
-    """SHA256-хеш датасету — версія даних для трасованості (reference для drift-аналізу)."""
     hasher = hashlib.sha256()
     hasher.update(X.tobytes())
     hasher.update(y.tobytes())
     return hasher.hexdigest()[:12]
 
 
+def compute_and_tag_checksum(client: MlflowClient, run_id: str, version: str) -> str:
+    """
+    Довантажує артефакт моделі, рахує SHA256 усього вмісту директорії
+    (immutable model artifact, C4), записує як tag версії в Registry.
+    Inference-сервіс перевіряє цей tag перед завантаженням моделі.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        local_path = mlflow.artifacts.download_artifacts(
+            run_id=run_id, artifact_path="model", dst_path=tmp_dir
+        )
+        hasher = hashlib.sha256()
+        for root, _, files in os.walk(local_path):
+            for fname in sorted(files):
+                fpath = os.path.join(root, fname)
+                with open(fpath, "rb") as f:
+                    hasher.update(f.read())
+        checksum = hasher.hexdigest()
+
+    client.set_model_version_tag(
+        name=REGISTERED_MODEL_NAME,
+        version=version,
+        key="sha256_checksum",
+        value=checksum,
+    )
+    logger.info("Checksum моделі версії %s: %s", version, checksum)
+    return checksum
+
+
 def push_metrics_to_gateway(run_id: str, accuracy: float, loss: float) -> None:
-    """Пушить accuracy та loss конкретного run-у в Prometheus PushGateway."""
     registry = CollectorRegistry()
     accuracy_gauge = Gauge(
-        "mlflow_accuracy",
-        "Accuracy тренованої моделі",
-        ["run_id"],
-        registry=registry,
+        "mlflow_accuracy", "Accuracy тренованої моделі", ["run_id"], registry=registry
     )
     loss_gauge = Gauge(
-        "mlflow_loss",
-        "Log loss тренованої моделі",
-        ["run_id"],
-        registry=registry,
+        "mlflow_loss", "Log loss тренованої моделі", ["run_id"], registry=registry
     )
     accuracy_gauge.labels(run_id=run_id).set(accuracy)
     loss_gauge.labels(run_id=run_id).set(loss)
@@ -122,7 +140,6 @@ def push_metrics_to_gateway(run_id: str, accuracy: float, loss: float) -> None:
 
 
 def copy_best_model(run_id: str) -> None:
-    """Скачує модель-артефакт найкращого run-у в ./best_model/."""
     if os.path.exists(BEST_MODEL_DIR):
         shutil.rmtree(BEST_MODEL_DIR)
 
@@ -180,8 +197,6 @@ def main() -> None:
                 registered_model_name=REGISTERED_MODEL_NAME,
             )
 
-            # Кожен новий run реєструє нову версію моделі — переводимо її
-            # автоматично у Staging (вимога B2: нова версія завжди Staging).
             registered_version = model_info.registered_model_version
             client.transition_model_version_stage(
                 name=REGISTERED_MODEL_NAME,
@@ -189,8 +204,9 @@ def main() -> None:
                 stage="Staging",
                 archive_existing_versions=False,
             )
+            checksum = compute_and_tag_checksum(client, run_id, registered_version)
             logger.info(
-                "Модель %s версія %s зареєстрована та переведена в Staging",
+                "Модель %s версія %s зареєстрована, переведена в Staging, checksum записано",
                 REGISTERED_MODEL_NAME,
                 registered_version,
             )
@@ -206,6 +222,7 @@ def main() -> None:
                     "accuracy": accuracy,
                     "loss": loss,
                     "model_version": registered_version,
+                    "checksum": checksum,
                 }
             )
 
