@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: training-pipeline
+  namespace: workflows
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+
+  templates:
+    - name: main
+      steps:
+        - - name: validate-env
+            template: validate-env
+        - - name: train-and-register
+            template: train-and-register
+
+    - name: validate-env
+      container:
+        image: curlimages/curl:8.10.1
+        command: ["sh", "-c"]
+        args:
+          - |
+            echo "Перевірка доступності MLflow tracking server..."
+            curl -sf --max-time 10 -o /dev/null -w "HTTP_CODE:%{http_code}\n" \
+              http://mlflow.mlops-system.svc.cluster.local:5000/health \
+              || (echo "MLflow недоступний, зупиняємо workflow" && exit 1)
+            echo "MLflow доступний, продовжуємо"
+
+    - name: train-and-register
+      container:
+        image: localhost:5001/training-pipeline:v1
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: "http://mlflow.mlops-system.svc.cluster.local:5000"
+          - name: AWS_ACCESS_KEY_ID
+            value: "minioadmin"
+          - name: AWS_SECRET_ACCESS_KEY
+            value: "minioadmin123"
+          - name: MLFLOW_S3_ENDPOINT_URL
+            value: "http://minio.mlops-system.svc.cluster.local:9000"
+          - name: PUSHGATEWAY_URL
+            value: "pushgateway-prometheus-pushgateway.monitoring.svc.cluster.local:9091"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi

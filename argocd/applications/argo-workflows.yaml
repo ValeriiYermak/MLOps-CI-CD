@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-workflows
+  namespace: infra-tools
+spec:
+  project: default
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argo-workflows
+    targetRevision: 0.45.15
+    helm:
+      values: |
+        controller:
+          containerRuntimeExecutor: emissary
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+
+        server:
+          extraArgs:
+            - --auth-mode=server
+          service:
+            type: ClusterIP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+        workflow:
+          serviceAccount:
+            create: true
+          rbac:
+            create: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workflows
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
