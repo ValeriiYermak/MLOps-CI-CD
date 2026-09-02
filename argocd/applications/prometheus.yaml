@@ -49,11 +49,7 @@ spec:
           enabled: false
 
         serverFiles:
-          prometheus.yml:
-            global:
-              scrape_interval: 15s
-              evaluation_interval: 15s
-
+          prometheus.yml:            
             scrape_configs:
               - job_name: prometheus
                 static_configs:
