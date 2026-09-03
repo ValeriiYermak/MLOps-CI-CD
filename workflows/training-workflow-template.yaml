@@ -30,6 +30,7 @@ spec:
     - name: train-and-register
       container:
         image: localhost:5001/training-pipeline:v1
+        command: ["python", "train_and_push.py"]
         env:
           - name: MLFLOW_TRACKING_URI
             value: "http://mlflow.mlops-system.svc.cluster.local:5000"

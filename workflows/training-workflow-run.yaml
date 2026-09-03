@@ -1,0 +1,8 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: training-pipeline-run-
+  namespace: workflows
+spec:
+  workflowTemplateRef:
+    name: training-pipeline
