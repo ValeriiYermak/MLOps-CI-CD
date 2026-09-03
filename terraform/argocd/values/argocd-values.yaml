@@ -44,6 +44,22 @@ controller:
       cpu: 500m
       memory: 512Mi
 
+# --- Repo Server: явні ресурси + збільшений git exec timeout ---
+# Причина: при масовому одночасному pull образів під час першого старту
+# кластера repo-server не встигав виконати `git fetch` за дефолтні 90с
+# (ARGOCD_EXEC_TIMEOUT), через відсутність гарантованих ресурсів.
+repoServer:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  env:
+    - name: ARGOCD_EXEC_TIMEOUT
+      value: "5m"
+
 # --- Таймаути на рівні Helm-операцій (встановлення/оновлення) ---
 global:
   revisionHistoryLimit: 5
