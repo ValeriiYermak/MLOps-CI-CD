@@ -5,7 +5,6 @@ metadata:
   namespace: infra-tools
 spec:
   project: default
-
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: grafana
@@ -14,13 +13,10 @@ spec:
       values: |
         service:
           type: ClusterIP
-
         persistence:
           enabled: false
-
         adminUser: admin
         adminPassword: admin123
-
         resources:
           requests:
             cpu: 50m
@@ -28,7 +24,6 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
-
         datasources:
           datasources.yaml:
             apiVersion: 1
@@ -43,11 +38,15 @@ spec:
                 url: http://loki.monitoring.svc.cluster.local:3100
                 access: proxy
                 isDefault: false
-
+        sidecar:
+          dashboards:
+            enabled: true
+            label: grafana_dashboard
+            labelValue: "1"
+            searchNamespace: monitoring
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-
   syncPolicy:
     automated:
       prune: true
