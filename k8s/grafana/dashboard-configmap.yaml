@@ -22,7 +22,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
           "targets": [
             {
-              "expr": "sum(rate(inference_requests_total[1m])) by (status)",
+              "expr": "sum(rate(inference_requests_total[5m])) by (status)",
               "legendFormat": "status {{status}}"
             }
           ],
@@ -52,7 +52,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
           "targets": [
             {
-              "expr": "sum(rate(inference_errors_total[1m])) by (error_type)",
+              "expr": "sum(rate(inference_errors_total[5m])) by (error_type)",
               "legendFormat": "{{error_type}}"
             }
           ],
